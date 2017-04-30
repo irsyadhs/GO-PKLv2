@@ -1,5 +1,6 @@
 package go_pkl.irsyaddhs.cs.upi.edu.go_pkl;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
@@ -11,6 +12,7 @@ import android.os.Bundle;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.util.Log;
+import android.widget.TextView;
 
 import com.android.volley.Request;
 import com.android.volley.Response;
@@ -49,6 +51,10 @@ public class MainMenu extends FragmentActivity implements OnMapReadyCallback,Goo
     LocationRequest mLocationRequest;
     Marker me;
     ArrayList<Marker> pMarker = new ArrayList<Marker>();
+    static final int ACT2_REQUEST = 99; //request code
+    public String terimaBanding;
+    public int nameExist;
+    Intent i = new Intent(this, RegisterAct.class);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,11 +66,80 @@ public class MainMenu extends FragmentActivity implements OnMapReadyCallback,Goo
         SharedPreferences.Editor ed = sp.edit();
         ed.putInt("id",1);
 
+        int status = sp.getInt("stt", 0);
+
+        if(status == 0){
+            startActivityForResult(i, ACT2_REQUEST);
+            ed.putInt("stt", 1);
+
+
+        }else if(status == 1){
+            sp.getString("un", "");
+        }
+
+
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data){
+        super.onActivityResult(requestCode, resultCode, data);
+
+        // /cek request code
+        if(requestCode == ACT2_REQUEST) {
+            final String[] terima = data.getStringArrayExtra("strings");
+            terimaBanding = terima[0];
+            handlePlayer(SELECT_PEMBELI, 0);
+
+            if (nameExist == 1) {
+                AlertDialog ad = new AlertDialog.Builder(this).create();
+                ad.setMessage("Username already existed");
+                ad.show();
+                //startActivityForResult(i, ACT2_REQUEST);
+            } else if (nameExist == 0) {
+                SharedPreferences sp = getSharedPreferences(SP, MODE_PRIVATE);
+                SharedPreferences.Editor ed = sp.edit();
+                ed.putString("un", terima[0]);
+
+                StringRequest postRequest = new StringRequest(Request.Method.POST, INSERT_PEMBELI,
+                        new Response.Listener<String>() {
+                            @Override
+                            public void onResponse(String response) {
+                                // menampilkan respone
+                                Log.d("Response POST", response);
+                            }
+                        },
+                        new Response.ErrorListener() {
+                            @Override
+                            public void onErrorResponse(VolleyError error) {
+                                // error
+                                Log.e(TAG, "onErrorResponse: Error= " + error);
+                                Log.e(TAG, "onErrorResponse: Error= " + error.getMessage());
+                            }
+                        }
+                ) {
+                    @Override
+                    protected Map<String, String> getParams() {
+                        // Menambahkan parameters post
+                        Map<String, String> params = new HashMap<String, String>();
+
+                        params.put("id", "");
+                        params.put("nama", terima[0]);
+                        params.put("lat", "");
+                        params.put("long", "");
+                        params.put("req", "");
+
+                        return params;
+                    }
+                };
+                AppController.getInstance().addToRequestQueue(postRequest);
+
+            }
+        }
     }
     /**
      * Request location every 10 second
@@ -138,15 +213,15 @@ public class MainMenu extends FragmentActivity implements OnMapReadyCallback,Goo
         super.onStop();
         mGoogleApiClient.disconnect();
     }
-    private void handlePlayer(){
-        JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, SELECT_PEDAGANG, null,
+    private void handlePlayer(String slct, final int st){
+        JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, slct, null,
                 new Response.Listener<JSONObject>()
                 {
                     @Override
                     public void onResponse(JSONObject response) {
 
                         Log.i(TAG, "onResponse: playerResult= " + response.toString());
-                        parsePlayer(response);
+                        parsePlayer(response, st);
                     }
                 },
                 new Response.ErrorListener()
@@ -163,41 +238,72 @@ public class MainMenu extends FragmentActivity implements OnMapReadyCallback,Goo
 
         AppController.getInstance().addToRequestQueue(request);
     }
-    private void parsePlayer(JSONObject result){
-        String id,name,tipe;
-        double latitude, longitude;
+    private void parsePlayer(JSONObject result, int st){
+        if(st == 1) {
+            String id, name, tipe;
+            double latitude, longitude;
 
 
-        try {
-            JSONArray jsonArray = result.getJSONArray("users");
+            try {
+                JSONArray jsonArray = result.getJSONArray("users");
 
-            if (result.getString("success").equalsIgnoreCase("1")) {
+                if (result.getString("success").equalsIgnoreCase("1")) {
 
-                for (int i = 0; i < jsonArray.length(); i++) {
-                    JSONObject pedagang = jsonArray.getJSONObject(i);
+                    for (int i = 0; i < jsonArray.length(); i++) {
+                        JSONObject pedagang = jsonArray.getJSONObject(i);
 
-                    id = pedagang.getString("id");
+                        id = pedagang.getString("id");
 
-                    name = pedagang.getString("nama");
-                    tipe = pedagang.getString("tipe");
+                        name = pedagang.getString("nama");
+                        tipe = pedagang.getString("tipe");
 
-                    latitude = pedagang.getDouble("lat");
-                    longitude = pedagang.getDouble("long");
-                    LatLng latLng = new LatLng(latitude, longitude);
+                        latitude = pedagang.getDouble("lat");
+                        longitude = pedagang.getDouble("long");
+                        LatLng latLng = new LatLng(latitude, longitude);
 
 
-                    MarkerOptions mo = new MarkerOptions().position(latLng).title(name).snippet(tipe);
-                    Log.d("opsi",mo.toString());
-                    pMarker.add(mMap.addMarker(mo));
+                        MarkerOptions mo = new MarkerOptions().position(latLng).title(name).snippet(tipe).icon(BitmapDescriptorFactory.fromResource(R.drawable.markersellers));
+                        Log.d("opsi", mo.toString());
+                        pMarker.add(mMap.addMarker(mo));
+
+                    }
+                } else if (result.getString("success").equalsIgnoreCase("0")) {
 
                 }
-            } else if (result.getString("success").equalsIgnoreCase("0")){
+            } catch (JSONException e) {
 
+                e.printStackTrace();
+                Log.e(TAG, "parseLocationResult: Error=" + e.getMessage());
             }
-        } catch (JSONException e) {
+        }else if(st == 0){
+            String name;
+            int stop;
+            stop = 0;
+            try {
+                JSONArray jsonArray = result.getJSONArray("users");
 
-            e.printStackTrace();
-            Log.e(TAG, "parseLocationResult: Error=" + e.getMessage());
+                if (result.getString("success").equalsIgnoreCase("1")) {
+                    int i;
+                    i = 0;
+                    while((i < jsonArray.length()) && (stop == 0)) {
+                        JSONObject pembeli = jsonArray.getJSONObject(i);
+                        name = pembeli.getString("nama");
+                        if(name == terimaBanding){
+                            nameExist = 1;
+                            stop = 1;
+                        }else{
+                            nameExist = 0;
+                        }
+                        i++;
+                    }
+                } else if (result.getString("success").equalsIgnoreCase("0")) {
+
+                }
+            } catch (JSONException e) {
+
+                e.printStackTrace();
+                Log.e(TAG, "parseLocationResult: Error=" + e.getMessage());
+            }
         }
     }
 
@@ -217,7 +323,7 @@ public class MainMenu extends FragmentActivity implements OnMapReadyCallback,Goo
         me = mMap.addMarker(new MarkerOptions().position(new LatLng(location.getLatitude(),location.getLongitude())).title("You"));
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(),location.getLongitude()),17));
         LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient,mLocationRequest,this);
-        handlePlayer();
+        handlePlayer(SELECT_PEDAGANG, 1);
         for(int i = 0;i < pMarker.size(); i++){
 
         }
@@ -268,7 +374,7 @@ public class MainMenu extends FragmentActivity implements OnMapReadyCallback,Goo
                 // Menambahkan parameters post
                 Map<String, String>  params = new HashMap<String, String>();
                 SharedPreferences sp = getSharedPreferences(SP,MODE_PRIVATE);
-                params.put("id",sp.getString("id","1"));
+                params.put("nama",sp.getString("un",""));
                 params.put("lat", String.valueOf(loc.getLatitude()));
                 params.put("long", String.valueOf(loc.getLongitude()));
 
